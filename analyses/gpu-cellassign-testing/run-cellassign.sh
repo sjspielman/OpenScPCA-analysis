@@ -11,7 +11,8 @@ input_anndata="${data_dir}/SCPCL000001_processed_rna.h5ad"
 reference_file="./brain.tsv"
 output_file="./cellassign-predictions.tsv"
 
-conda activate openscpca-gpu-cellassign-testing
+#conda init
+#conda activate openscpca-gpu-cellassign-testing
 
 python3 ${script} \
     --anndata_file ${input_anndata} \
