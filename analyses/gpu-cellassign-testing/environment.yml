@@ -1,0 +1,22 @@
+name: "openscpca-gpu-cellassign-testing"
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - pytorch
+platforms:
+  - linux-64
+  - osx-64
+  - osx-arm64
+dependencies:
+  - python=3.11
+  - awscli=2.15
+  - conda-lock=2.5
+  - jq=1.7
+  - pre-commit=3.6
+  - session-info=1.0
+  - anndata
+  - pytorch::pytorch-cuda=11.7
+  - pip
+  - pip:
+    - scvi-tools
