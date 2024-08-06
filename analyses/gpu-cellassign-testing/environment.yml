@@ -4,6 +4,7 @@ channels:
   - bioconda
   - defaults
   - pytorch
+  - nvidia
 platforms:
   - linux-64
   - osx-64
