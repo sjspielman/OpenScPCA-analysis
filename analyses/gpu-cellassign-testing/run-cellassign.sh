@@ -8,7 +8,7 @@ module_dir=$(pwd)
 script=../cell-type-ewings/scripts/cnv-workflow/02-run-cellassign.py
 data_dir="${module_dir}/../../data/test/SCPCP000001/SCPCS000001/"
 input_anndata="${data_dir}/SCPCL000001_processed_rna.h5ad"
-reference_file="./brain-compartment_PanglaoDB_2020-03-27.tsv"
+reference_file="./brain.tsv"
 output_file="./cellassign-predictions.tsv"
 
 conda activate openscpca-gpu-cellassign-testing
