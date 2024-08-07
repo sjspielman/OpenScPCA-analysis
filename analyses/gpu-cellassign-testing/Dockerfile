@@ -1,11 +1,5 @@
 FROM continuumio/miniconda3:24.1.2-0
 
-# Labels following the Open Containers Initiative (OCI) recommendations
-# For more information, see https://specs.opencontainers.org/image-spec/annotations/?v=v1.0.1
-LABEL org.opencontainers.image.title="openscpca/gpu-cellassign-testing"
-LABEL org.opencontainers.image.description="Docker image for testing CellAssign on GPU"
-LABEL org.opencontainers.image.authors="OpenScPCA scpca@ccdatalab.org"
-
 # Set an environment variable to allow checking if we are in an OpenScPCA container
 ENV OPENSCPCA_DOCKER=TRUE
 
