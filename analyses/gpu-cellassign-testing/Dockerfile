@@ -20,7 +20,8 @@ ARG ENV_NAME=gpu
 
 
 COPY environment.yml environment.yml
-RUN conda env create --file environment.yml \
+RUN conda config --set ssl_verify False
+RUN conda env create --file environment.yml && \
   conda clean --all --yes
 
 # Activate conda environment on bash launch
