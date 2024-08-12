@@ -1,5 +1,6 @@
 import anndata as adata
 import pandas as pd
+import numpy as np
 import scvi
 from scvi.external import CellAssign
 
@@ -8,14 +9,14 @@ scvi.settings.seed = 2024
 
 # read in marker gene reference
 ref_matrix = pd.read_csv(
-    "full-brain-reference.tsv", sep="\t", index_col="ensembl_gene_id"
+    "small-brain.tsv", sep="\t", index_col="ensembl_gene_id"
 )
 
 # read in anndata
-adata = adata.read_h5ad("SCPCS000001_processed_rna.h5ad")
+adata = adata.read_h5ad("../../data/current/SCPCP000001/SCPCS000001/SCPCL000001_processed_rna.h5ad")
 
 # subset anndata to contain only genes in the reference file
-shared_genes = list(set(ref_matrix.index) & set(annotated_adata.var_names))
+shared_genes = list(set(ref_matrix.index) & set(adata.var_names))
 subset_adata = adata[:, shared_genes].copy()
 subset_adata.X = subset_adata.X.tocsr()
 
