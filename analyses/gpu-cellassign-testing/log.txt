@@ -1,1 +1,120 @@
-Training:   0%|          | 0/400 [00:00<?, ?it/s]Epoch 1/400:   0%|          | 0/400 [00:00<?, ?it/s]Epoch 1/400:   0%|          | 0/400 [00:00<?, ?it/s]
+Seed set to 2024
+/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/data/fields/_base_field.py:64: UserWarning: adata.X does not contain unnormalized count data. Are you sure this is what you want?
+  self.validate_field(adata)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:441: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/fit_loop.py:293: The number of training batches (3) is smaller than the logging interval Trainer(log_every_n_steps=10). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
+/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:441: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.
+Training:   0%|          | 0/400 [00:00<?, ?it/s]Epoch 1/400:   0%|          | 0/400 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/lightsail-user/gpu-cellassign-testing/OpenScPCA-analysis/analyses/gpu-cellassign-testing/cellassign.py", line 140, in <module>
+    model.train(accelerator="gpu") # this did not help: , batch_size = 2048) # doublet the default? 
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/external/cellassign/_model.py", line 235, in train
+    return runner()
+           ^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/train/_trainrunner.py", line 98, in __call__
+    self.trainer.fit(self.training_plan, self.data_splitter)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/train/_trainer.py", line 220, in fit
+    super().fit(*args, **kwargs)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/trainer.py", line 544, in fit
+    call._call_and_handle_interrupt(
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/call.py", line 44, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/trainer.py", line 580, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/trainer.py", line 989, in _run
+    results = self._run_stage()
+              ^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/trainer.py", line 1035, in _run_stage
+    self.fit_loop.run()
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/fit_loop.py", line 202, in run
+    self.advance()
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/fit_loop.py", line 359, in advance
+    self.epoch_loop.run(self._data_fetcher)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 136, in run
+    self.advance(data_fetcher)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 240, in advance
+    batch_output = self.automatic_optimization.run(trainer.optimizers[0], batch_idx, kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 187, in run
+    self._optimizer_step(batch_idx, closure)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 265, in _optimizer_step
+    call._call_lightning_module_hook(
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/call.py", line 157, in _call_lightning_module_hook
+    output = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/core/module.py", line 1291, in optimizer_step
+    optimizer.step(closure=optimizer_closure)
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/core/optimizer.py", line 151, in step
+    step_output = self._strategy.optimizer_step(self._optimizer, closure, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/strategies/strategy.py", line 230, in optimizer_step
+    return self.precision_plugin.optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/plugins/precision/precision.py", line 117, in optimizer_step
+    return optimizer.step(closure=closure, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/optim/optimizer.py", line 484, in wrapper
+    out = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/optim/optimizer.py", line 89, in _use_grad
+    ret = func(self, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/optim/adam.py", line 205, in step
+    loss = closure()
+           ^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/plugins/precision/precision.py", line 104, in _wrap_closure
+    closure_result = closure()
+                     ^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 140, in __call__
+    self._result = self.closure(*args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 126, in closure
+    step_output = self._step_fn()
+                  ^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 315, in _training_step
+    training_step_output = call._call_strategy_hook(trainer, "training_step", *kwargs.values())
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/trainer/call.py", line 309, in _call_strategy_hook
+    output = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/lightning/pytorch/strategies/strategy.py", line 382, in training_step
+    return self.lightning_module.training_step(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/train/_trainingplans.py", line 344, in training_step
+    _, _, scvi_loss = self.forward(batch, loss_kwargs=self.loss_kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/train/_trainingplans.py", line 278, in forward
+    return self.module(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/module/base/_decorators.py", line 32, in auto_transfer_args
+    return fn(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/module/base/_base_module.py", line 203, in forward
+    return _generic_forward(
+           ^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/module/base/_base_module.py", line 747, in _generic_forward
+    generative_outputs = module.generative(**generative_inputs, **generative_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/module/base/_decorators.py", line 32, in auto_transfer_args
+    return fn(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lightsail-user/.conda/envs/gpu/lib/python3.11/site-packages/scvi/external/cellassign/_module.py", line 185, in generative
+    torch.sum(a * torch.exp(-b * torch.square(mu_ngcb - basis_means)), 3) + LOWER_BOUND
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 6.57 GiB. GPU 0 has a total capacity of 14.58 GiB of which 3.36 GiB is free. Process 2254 has 247.58 MiB memory in use. Including non-PyTorch memory, this process has 10.98 GiB memory in use. Of the allocated memory 10.84 GiB is allocated by PyTorch, and 18.47 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Epoch 1/400:   0%|          | 0/400 [00:00<?, ?it/s]
