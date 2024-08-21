@@ -9,7 +9,7 @@ scvi.settings.seed = 2024
 
 # read in marker gene reference
 ref_matrix = pd.read_csv(
-    "small-brain.tsv", sep="\t", index_col="ensembl_gene_id"
+    "full-brain.tsv", sep="\t", index_col="ensembl_gene_id"
 )
 
 # read in anndata
@@ -27,5 +27,14 @@ subset_adata.obs["size_factor"] = lib_size / np.mean(lib_size)
 # CellAssign inference
 scvi.external.CellAssign.setup_anndata(subset_adata, size_factor_key="size_factor")
 model = CellAssign(subset_adata, ref_matrix)
-model.train(accelerator="gpu")
+model.train(accelerator="gpu", batch_size=128) # default is 1024, ensmallen to get it to run apparently. this reduces GPU efficiency, but it runs....
+# noting that with the full brain reference, this runs at 32, 64, 128, but NOT 256. so that's a limit I suppose.
+# https://github.com/scverse/scvi-tools/issues/2935#issuecomment-2296237298
+
+
+#with torch.no_grad():
+torch.cuda.empty_cache()
+#  gc.collect()
+
+
 predictions = model.predict()

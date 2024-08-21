@@ -1,4 +1,4 @@
-name: "openscpca-gpu"
+name: "libcublas-pytorch"
 channels:
   - conda-forge
   - bioconda
@@ -10,9 +10,8 @@ dependencies:
   - python=3.11
   - conda-lock=2.5
   - jq=1.7
-  - pre-commit>=3.6
-  - awscli>=2.15
   - anndata
+  - conda-forge::libcublas
   - pytorch::pytorch-cuda
   - pip
   - pip:
