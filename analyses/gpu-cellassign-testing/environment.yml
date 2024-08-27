@@ -1,14 +1,11 @@
-name: "gpu"
+name: "gpu-cellassign"
 channels:
   - conda-forge
   - bioconda
-  - defaults
   - pytorch
   - nvidia
 platforms:
   - linux-64
-  - osx-64
-  - osx-arm64
 dependencies:
   - python=3.11
   - awscli=2.15
@@ -17,8 +14,9 @@ dependencies:
   - pre-commit=3.6
   - session-info=1.0
   - anndata
-  - pytorch::pytorch-cuda=11.7
+  - pytorch::pytorch-cuda
   - pip
   - pip:
     - scvi-tools
     - "jax[cuda12]"
+
