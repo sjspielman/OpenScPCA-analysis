@@ -1,4 +1,4 @@
-name: "openscpca-gpu"
+name: "gpu-cellassign"
 channels:
   - conda-forge
   - bioconda
@@ -18,3 +18,4 @@ dependencies:
   - pip:
     - scvi-tools
     - "jax[cuda12]"
+
