@@ -13,7 +13,7 @@ ref_matrix = pd.read_csv(
 )
 
 # read in anndata
-adata = adata.read_h5ad("../../data/current/SCPCP000001/SCPCS000001/SCPCL000001_processed_rna.h5ad")
+adata = adata.read_h5ad("../../data/2024-08-22/SCPCP000001/SCPCS000001/SCPCL000001_processed_rna.h5ad")
 
 # subset anndata to contain only genes in the reference file
 shared_genes = list(set(ref_matrix.index) & set(adata.var_names))
@@ -30,11 +30,5 @@ model = CellAssign(subset_adata, ref_matrix)
 model.train(accelerator="gpu", batch_size=128) # default is 1024, ensmallen to get it to run apparently. this reduces GPU efficiency, but it runs....
 # noting that with the full brain reference, this runs at 32, 64, 128, but NOT 256. so that's a limit I suppose.
 # https://github.com/scverse/scvi-tools/issues/2935#issuecomment-2296237298
-
-
-#with torch.no_grad():
-torch.cuda.empty_cache()
-#  gc.collect()
-
 
 predictions = model.predict()
