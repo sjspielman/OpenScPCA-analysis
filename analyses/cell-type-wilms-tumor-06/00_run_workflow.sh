@@ -1,16 +1,26 @@
 #!/bin/bash
 
 # This script runs the module workflow.
+# There are two variables this script will take:
+# 1. The TESTING variable controls whether test data should be used.
+#  Setting TESTING=1 will use the test data.
+#  This variable is 0 by default.
+# 2. The RUN_EXPLORATORY variable controls whether optional exploratory
+#  steps that do not directly contribute to final cell type annotations
+#  should be run. Setting RUN_EXPLORATORY=1 will run those steps.
+#  This variable is 0 by default.
 #
 # USAGE:
-# bash 00_run_workflow.sh
+# ./00_run_workflow.sh
 #
 # USAGE in CI:
-# TESTING=1 bash 00_run_workflow.sh
+# TESTING=1 ./00_run_workflow.sh
+#
 
 set -euo pipefail
 
 IS_CI=${TESTING:-0}
+RUN_EXPLORATORY=${RUN_EXPLORATORY:-0} # by default, do not run exploratory steps
 project_id="SCPCP000006"
 
 # Ensure script is being run from its directory
@@ -83,21 +93,24 @@ for sample_dir in ${data_dir}/${project_id}/SCPCS*; do
                     output_file = '02b_fetal_all_reference_Stewart_${sample_id}.html',
                     output_dir = '${sample_notebook_dir}')"
 
-    # Temporarily this code is not run in CI.
-    if [[ $IS_CI -eq 0 ]]; then
-
-
+    if [[ $RUN_EXPLORATORY -eq 1 ]]; then
         # Cluster exploration
         Rscript -e "rmarkdown::render('${notebook_template_dir}/03_clustering_exploration.Rmd',
-                        params = list(scpca_project_id = '${project_id}', sample_id = '${sample_id}'),
+                        params = list(scpca_project_id = '${project_id}', sample_id = '${sample_id}', testing = ${IS_CI}),
                         output_format = 'html_document',
                         output_file = '03_clustering_exploration_${sample_id}.html',
                         output_dir = '${sample_notebook_dir}')"
     fi
 done
 
-# Temporarily this code is not run in CI.
-if [[ $IS_CI -eq 0 ]]; then
+exit 0
+
+# This step is run here because it must be run both for:
+# - scripts/explore-cnv-methods.R (exploratory; calls 06_infercnv.R)
+# - 06_infercnv.R (not exploratory)
+Rscript scripts/06a_build-geneposition.R
+
+if [[ $RUN_EXPLORATORY -eq 1 ]]; then
 
   # Run notebook template to explore label transfer and clustering for all samples at once
   Rscript -e "rmarkdown::render('${notebook_output_dir}/04_annotation_Across_Samples_exploration.Rmd',
@@ -105,11 +118,48 @@ if [[ $IS_CI -eq 0 ]]; then
                   output_file = '04_annotation_Across_Samples_exploration.html',
                   output_dir = ${notebook_output_dir})"
 
-  # Build the gene position file reference for infercnv
-  Rscript scripts/06a_build-geneposition.R
-
   # Run infercnv and copykat for a selection of samples
   # This script calls scripts/05_copyKAT.R and scripts/06_infercnv.R
   Rscript scripts/explore-cnv-methods.R
 
 fi
+
+# Run infercnv for all samples with HMM i3 and using "both" as the reference
+for sample_dir in ${data_dir}/${project_id}/SCPCS*; do
+    sample_id=$(basename $sample_dir)
+
+    # sample-specific directories
+    results_dir=results/${sample_id}
+    sample_notebook_dir=notebook/${sample_id}
+
+    # We run SCPCS000190 with "none" instead of "both" since it does not have
+    # enough "normal" cells to use as a reference
+    if [[ ${sample_id} == "SCPCS000190" ]]; then
+      reference="none"
+    else
+      reference="both"
+    fi
+
+    # don't repeat inference on selection of samples since certain
+    # output files will already exist if exploratory steps were run
+    # Only run infercnv if:
+    #  exploratory steps were not run, meaning no result files exist
+    output_file="${results_dir}/${sample_id}/06_infercnv_HMM-i3_${sample_id}_reference-${reference}.rds"
+    if [[ ! -f $output_file ]]; then
+      Rscript scripts/06_infercnv.R --sample_id $sample_id --reference $reference --HMM i3
+    fi
+done
+
+# Render notebook to make draft annotations
+Rscript -e "rmarkdown::render('${notebook_template_dir}/07_combined_annotation_across_samples_exploration.Rmd',
+                        params = list(scpca_project_id = '${project_id}', sample_id = '${sample_id}'),
+                        output_format = 'html_document',
+                        output_file = '03_clustering_exploration_${sample_id}.html',
+                        output_dir = '${sample_notebook_dir}')"
+    rmarkdown::render(
+      input = file.path(notebook_output_dir, "07_combined_annotation_across_samples_exploration.Rmd "),
+      output_format = "html_document",
+      output_file = "07_combined_annotation_across_samples_exploration.html ",
+      output_dir = notebook_output_dir
+    )
+  }
