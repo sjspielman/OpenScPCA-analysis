@@ -146,16 +146,16 @@ The `00_run_workflow.sh` contains the following steps:
 
   - `Seurat workflow`, normalization and clustering: `01_seurat-processing.Rmd` in `notebook_template`
 
-  - `Azimuth` label transfer from the fetal full reference (Cao et al.): `02a_label-transfer_fetal_full_reference_Cao.Rmd` in `notebook_template`
+  - `Azimuth`-adapted label transfer from the fetal full reference (Cao et al.): `02a_label-transfer_fetal_full_reference_Cao.Rmd` in `notebook_template`
 
-  - `Azimuth` label transfer from the fetal kidney reference (Stewart et al.): `02b_label-transfer_fetal_kidney_reference_Stewart.Rmd` in `notebook_template`
+  - `Azimuth`-adapted label transfer from the fetal kidney reference (Stewart et al.): `02b_label-transfer_fetal_kidney_reference_Stewart.Rmd` in `notebook_template`
 
   - Exploration of clustering, label transfers, marker genes and pathways: `03_clustering_exploration.Rmd` in `notebook_template`
 
-  - CNV inference using [`infercnv`](https://github.com/broadinstitute/inferCNV/wiki) with endothelial and immune cells as reference from either the same patient or a pool of upfront resection Wilms tumor samples: `06_infercnv.R` in `script`
+  - CNV inference using [`infercnv`](https://github.com/broadinstitute/inferCNV/wiki) with endothelial and immune cells passing a prediction score threshold as reference, when possible: `06_infercnv.R` in `script`
 
 
-While we only selected the `infercnv` method with endothelium and immune cells as normal reference for the main workflow across samples, our  analysis includes an exploration of cnv inference methods based on `copykat` and `infercnv` on a subselection of samples:
+While we only selected the `infercnv` method with endothelium and immune cells as normal reference for the main workflow across samples, our analysis includes an exploration of cnv inference methods based on `copykat` and `infercnv` on a subselection of samples:
 the `script` `explore-cnv-methods.R` calls the independent scripts `05_copyKAT.R` and `06_infercnv.R` for the samples
 		    - "SCPCS000179",
         - "SCPCS000184",
@@ -167,7 +167,7 @@ In addition, we explored the results for all samples in one notebook twice durin
 
 - the notebook `04_annotation_Across_Samples_exploration.Rmd` explored the annotations obtained by label transfer in all samples
 
-- the notebook `07_annotation_Across_Samples_exploration.Rmd` explored the potential of combining label transfer and cnv to finalize the annotation of the Wilms tumor dataset.
+- the notebook `07_combined_annotation_across_Samples_exploration.Rmd` explored the potential of combining label transfer and cnv to finalize the annotation of the Wilms tumor dataset.
 
 
 For each sample and each of the step, an html report is generated and accessible in the directory `notebook`.
