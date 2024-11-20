@@ -17,6 +17,6 @@ This directory contains template notebooks whose output HTML files are stored in
   - Evaluates the use of `predicted.score` for label transfer interpretation
 - `05_copykat_exploration.Rmd`
   - Explores and compares `copyKAT` results run on a subset of samples
-- `06_infercnv_exploration.Rmd`
+- `06_cnv_infercnv_exploration.Rmd`
   - Explores and compares `inferCNV` results run on a subset of samples
 

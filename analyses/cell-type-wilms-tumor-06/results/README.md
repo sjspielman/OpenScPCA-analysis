@@ -109,7 +109,7 @@ In addition, for the condition `reference = "both"`, we ran `infercnv` with `HMM
 However, HMM CNV prediction methods uses a lot of resources, including time (~2h/sample/condition), and often causes the R session to crash.
 This is why we only ran the HMM model for one `reference` condition. After selection of the best reference to use, we will run it for all samples.
 
-For each of the selected samples, `06_infercnv_exploration_{sample_id}.html` is the output of the [`06_infercnv_exploration.Rmd`](../notebook_template/06_infercnv_exploration.Rmd) notebook template.
+For each of the selected samples, `06_infercnv_exploration_{sample_id}.html` is the output of the [`06_cnv_infercnv_exploration.Rmd`](../notebook_template/06_cnv_infercnv_exploration.Rmd) notebook template.
 
 
 ## Annotations
