@@ -65,8 +65,8 @@ The input file `r params$fetal_kidney_path` is the output of the script `prepare
 
 ## Output file
 
-We will save the result of the differential expression analysis in `results/references/00b_marker_genes_fetal_kidney_Stewart.csv`.
-Notebook is saved in the `notebook/00-reference` directory.
+We will save the result of the differential expression analysis in `results/references/00b_marker_compartment_fetal_kidney_Stewart.csv` and `results/references/00b_marker_cell-type_fetal_kidney_Stewart.csv` .
+The notebook is saved in the `results/references/` directory.
 
 ```{r path_to_output}
 path_to_output <- file.path(module_base, "results", "references")
@@ -137,7 +137,7 @@ p3 <- ggplot(fetal_kidney@meta.data, aes(compartment, fill = compartment)) +
 common_title <- sprintf("Unsupervised clustering %s, %d cells", fetal_kidney@meta.data$orig.ident[1], ncol(fetal_kidney))
 show((((p1 / p3) + plot_layout(heights = c(3, 2)) | p2)) + plot_layout(widths = c(1, 2)) + plot_layout(heights = c(3, 1)) + plot_annotation(title = common_title))
 
-write_csv(de_results, file = file.path(path_to_output, "00a_marker_compartment_fetal_kidney_Stewart.csv"))
+write_csv(de_results, file = file.path(path_to_output, "00b_marker_compartment_fetal_kidney_Stewart.csv"))
 ```
 
 
@@ -184,7 +184,7 @@ p3 <- ggplot(fetal_kidney@meta.data, aes(cell_type, fill = cell_type)) +
 common_title <- sprintf("Unsupervised clustering %s, %d cells", fetal_kidney@meta.data$orig.ident[1], ncol(fetal_kidney))
 show((((p1 / p3) + plot_layout(heights = c(3, 2)) | p2)) + plot_layout(widths = c(1, 1)) + plot_layout(heights = c(3, 1)) + plot_annotation(title = common_title))
 
-write_csv(de_results, file = file.path(path_to_output, "00a_marker_cell-type_fetal_kidney_Stewart.csv"))
+write_csv(de_results, file = file.path(path_to_output, "00b_marker_cell-type_fetal_kidney_Stewart.csv"))
 ```
 
 ## References
