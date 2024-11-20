@@ -68,11 +68,7 @@ Some differences are expected, some marker genes or pathways are associated with
 
 ## Output files
 
-for each of the steps, we have two types of `output`:
-
-- the `notebook` saved in the `notebook` directory, with a folder for each sample.
-
-- the created objects saved in `results` directory, with a folder for each sample.
+For each of the steps, the rendered notebook and results are saved in the `results` directory, with a folder for each sample.
 
 
 # Analysis
@@ -149,9 +145,9 @@ The `00_run_workflow.sh` contains the following steps:
 
   - `Seurat workflow`, normalization and clustering: `01_seurat-processing.Rmd` in `notebook_template`
 
-  - `Azimuth` label transfer from the fetal full reference (Cao et al.): `02a_label-transfer_fetal_full_reference_Cao.Rmd` in `notebook_template`
+  - `Azimuth`-adapted label transfer from the fetal full reference (Cao et al.): `02a_label-transfer_fetal_full_reference_Cao.Rmd` in `notebook_template`
 
-  - `Azimuth` label transfer from the fetal kidney reference (Stewart et al.): `02b_label-transfer_fetal_kidney_reference_Stewart.Rmd` in `notebook_template`
+  - `Azimuth`-adapted label transfer from the fetal kidney reference (Stewart et al.): `02b_label-transfer_fetal_kidney_reference_Stewart.Rmd` in `notebook_template`
 
   - Exploration of clustering, label transfers, marker genes and pathways: `03_clustering_exploration.Rmd` in `notebook_template`
 
@@ -169,12 +165,10 @@ The script `explore-cnv-methods.R` calls the independent scripts `05_copyKAT.R` 
 
 In addition, we explored the results for all samples in one notebook twice during the analysis:
 
-- the notebook `04_annotation_Across_Samples_exploration.Rmd` explored the annotations obtained by label transfer in all samples
+- the notebook `notebook_template/04_annotation_Across_Samples_exploration.Rmd` explored the annotations obtained by label transfer in all samples. Output is saved in `results/`.
 
-- the notebook `07_annotation_Across_Samples_exploration.Rmd` explored the potential of combining label transfer and CNV to finalize the annotation of the Wilms tumor dataset.
+- the notebook `notebook/07_annotation_Across_Samples_exploration.Rmd` explored the potential of combining label transfer and CNV to finalize the annotation of the Wilms tumor dataset. Output is saved in `notebook/`/
 
-
-For each sample and each of the step, an html report is generated and accessible in the directory `notebook`.
 
 ### Justification
 
