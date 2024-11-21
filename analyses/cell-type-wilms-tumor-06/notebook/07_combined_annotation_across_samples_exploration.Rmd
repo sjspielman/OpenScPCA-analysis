@@ -284,7 +284,7 @@ do_Feature_mean <- function(df, group.by, feature) {
 
 ### Global CNV score
 
-As done in `06_cnv_infercnv_exploration.Rmd`, we calculate  single CNV score and assess its potential in identifying cells with CNV versus normal cells without CNV.
+As done in `06_infercnv_exploration.Rmd`, we calculate single CNV score and assess its potential in identifying cells with CNV versus normal cells without CNV.
 
 We simply checked for each chromosome if the cell `has_cnv_chr`.
 Would the cell have more than `cnv_threshold` chromosome with CNV, the global `has_cnv_score` will be TRUE.
