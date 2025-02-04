@@ -2,86 +2,91 @@
 
 # load library
 library(tidyverse)
-library(stringr)
 
+# Setup ------------------
 
 # The base path for the OpenScPCA repository, found by its (hidden) .git directory
 repository_base <- rprojroot::find_root(rprojroot::is_git_root)
 # The path to this module
 module_base <- file.path(repository_base, "analyses", "cell-type-wilms-tumor-06")
+# The path to the reference directory
+reference_dir <- file.path(module_base, "results", "references")
 
-# Define the file paths
-gene_order_file <- file.path(module_base, "results", "references", "gencode_v38_gene_pos.txt")
-arm_order_file <- file.path(module_base, "results", "references", "hg38_cytoBand.txt")
-gene_arm_order_file <- file.path(module_base, "results", "references", "gencode_v38_gene_pos_arm.txt")
+# URLs for data to download
+gtf_file_uri <- "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.gtf.gz"
+arm_order_file_url <- "http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cytoBand.txt.gz"
 
-if (!file.exists(gene_arm_order_file)) {
-  
-  # Download the updated gene order file for GENCODE v38 (Ensembl 104)
-  if (!file.exists(gene_order_file)) {
-    download.file(url = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_38/gencode.v38.annotation.gtf.gz",
-                  destfile = gene_order_file)
-  }
-  
-  # Read the GTF file and extract gene positions
-  gtf_data <- read.table(gzfile(gene_order_file), header = FALSE, sep = "\t", comment.char = "#", stringsAsFactors = FALSE)
-  
-  # Filter for gene entries only
-  gene_order <- gtf_data %>%
-    filter(V3 == "gene") %>%
-    select(V1, V4, V5, V9) %>% # Chromosome, Start, End, Attributes
-    filter(str_detect(V9, "gene_id")) %>% # Ensure we only process lines that contain "gene_id"
-    mutate(Ensembl_Gene_ID = str_extract(V9, "(ENSG[0-9]+)")) %>% # Use str_extract to capture ENSG number
-    select(Ensembl_Gene_ID, V1, V4, V5) %>% # Select relevant columns
-    rename(Chromosome = V1, Start = V4, End = V5)
-  
-  
-  # Download chromosome arm information (cytoBand data)
-  if (!file.exists(arm_order_file)) {
-    download.file(url = "http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/cytoBand.txt.gz",
-                  destfile = arm_order_file)
-  }
-  
-  # Load cytoBand file
-  cytoBand <- read.table(gzfile(arm_order_file), header = FALSE, sep = "\t", stringsAsFactors = FALSE)
-  colnames(cytoBand) <- c("chrom", "start", "end", "band", "stain")
-  
-  # Extract chromosome arm information
-  cytoBand <- cytoBand %>%
-    mutate(arm = substr(band, 1, 1))  # Extract 'p' or 'q' from the band column
-  
-  # Define arm boundaries
-  chromosome_arms <- cytoBand %>%
-    group_by(chrom, arm) %>%
-    summarize(
-      Start = min(start),
-      End = max(end),
-      .groups = "drop"
-    )
-  
-  # Add chromosome arm information
-  gene_order <- gene_order %>%
-    # Join chromosome arm information with gene_order based on Chromosome
-    left_join(chromosome_arms, by = c("Chromosome" = "chrom")) %>%
-    # Determine arm (p or q)
-    mutate(Arm = case_when(
-      (Start.x > End.y & arm == "p") ~ "q",
-      arm == "q" ~ NA,
-      .default = arm)) %>%
-    na.omit() %>%      
-    # Create Chromosome_arm by pasting Chromosome with Arm information
-    mutate(Chromosome = paste0(Chromosome, Arm)) %>%
-    # Define chromosome arm order
-    mutate(Chromosome = factor(Chromosome, levels = c(paste0("chr", rep(1:22, each = 2), c("p", "q")),
-                                                      "chrXp", "chrXq", "chrYp", "chrYq", "chrM"))) %>%
-    # Sort genes by Chromosome arm and Start position
-    arrange(Chromosome, Start.x)  %>%
-    # Select only relevant column for infercnv
-    select(Ensembl_Gene_ID, Chromosome, Start.x, End.x) %>%
-    # Remove ENSG duplicated (genes that are both on X and Y chromosome need to be remove before infercnv)
-    distinct(Ensembl_Gene_ID, .keep_all = TRUE)
-  
-  # Save the final output
-  write_tsv(gene_order, gene_arm_order_file, col_names = FALSE, append = FALSE)
+# Define the gene order file
+gtf_file <- file.path(reference_dir, "Homo_sapiens.GRCh38.104.gtf.gz")
 
-  }
+# Define the arm order file
+arm_order_file <- file.path(reference_dir, "hg38_cytoBand.txt")
+
+# Define the gene/arm combined information file for output
+gene_arm_order_file <- file.path(reference_dir, "gencode_v38_gene_pos_arm.txt")
+
+# Download files if they don't exist --------------------
+if (!file.exists(gtf_file)) {
+  system(
+    glue::glue("aws s3 cp {gtf_file_uri} {gtf_file_file} --no-sign-request")
+  )
+}
+if (!file.exists(arm_order_file)) {
+  download.file(url = arm_order_file_url, destfile = arm_order_file)
+}
+
+# Read and prepare input files -----------------
+
+gtf <- rtracklayer::readGFF(gtf_file)
+
+gene_order_df <- gtf |>
+  # keep only genes on standard chromosomes
+  filter(
+    grepl("^[0-9XY]+$", seqid),
+    type == "gene"
+  ) |>
+  select(
+    ensembl_id = gene_id,
+    chrom = seqid,
+    gene_start = start,
+    gene_end = end
+  ) |>
+  mutate(chrom = glue::glue("chr{chrom}"))
+
+# Load cytoBand file into R and assign column names
+cytoBand <- read_tsv(arm_order_file, col_names = FALSE)
+colnames(cytoBand) <- c("chrom", "chrom_arm_start", "chrom_arm_end", "band", "stain")
+
+# Add a column for the chromosome arm (p or q) and group by chromosome and arm
+#  to calculate arm start and end positions
+chromosome_arms_df <- cytoBand |>
+  mutate(arm = substr(band, 1, 1)) |>
+  group_by(chrom, arm) %>%
+  summarize(
+    chrom_arm_start = min(chrom_arm_start),
+    chrom_arm_end = max(chrom_arm_end),
+    .groups = "drop"
+  ) |>
+  # this will remove non-standard chromosomes which have NA arms
+  tidyr::drop_na()
+
+# Before continuing, we should have 48 rows in chromosome_arms:
+stopifnot("Could not get all chromosome arm bounds" = nrow(chromosome_arms_df) == 48)
+
+
+# Combine data frames to get the chromosome and arm for each gene --------------
+combined_df <- gene_order_df |>
+  # combine gene coordinates with chromosome arm coordinates
+  left_join(
+    chromosome_arms_df,
+    by = "chrom",
+    relationship = "many-to-many"
+  ) |>
+  # keep only rows where gene is on the chromosome arm
+  filter(gene_start >= chrom_arm_start & gene_end <= chrom_arm_end) |>
+  # create chrom_arm column
+  mutate(chrom_arm = glue::glue("{chrom}{arm}"))
+
+
+# Export --------------
+write_tsv(combined_df, gene_arm_order_file)
