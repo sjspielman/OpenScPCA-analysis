@@ -1,4 +1,4 @@
-name: "openscpca-cell-type-neuroblastoma-04"
+name: "openscpca-cell-type-neuroblastoma-04-gpu"
 channels:
   - conda-forge
   - bioconda
@@ -14,7 +14,8 @@ dependencies:
   - awscli>=2.15
   - anndata
   - pytorch::pytorch-cuda
+  - scvi-tools
   - pip
   - pip:
-    - scvi-tools
     - "jax[cuda12]"
+
