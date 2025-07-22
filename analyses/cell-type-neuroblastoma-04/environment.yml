@@ -13,3 +13,11 @@ dependencies:
   - jq>=1.7
   - pre-commit>=3.6
   - session-info>=1.0
+  - anndata
+  - pytorch::pytorch-cuda=12.4
+  - pip
+  - pip:
+    - scvi-tools
+    - numpy==1.26.4
+    - matplotlib
+    - "jax[cuda12]"
