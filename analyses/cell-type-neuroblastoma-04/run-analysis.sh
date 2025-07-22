@@ -55,6 +55,7 @@ cd ${module_dir}
 # Define and create directories
 # do this before flag setup since some directory names are used
 data_dir="../../data/current/SCPCP000004"
+merged_dir="../../data/current/results/merged-sce/SCPCP000004"
 script_dir="scripts"
 ref_dir="references"
 scratch_dir="scratch"
@@ -142,6 +143,7 @@ echo "Preparing the NBAtlas reference..."
 # Define the NBAtlas Seurat and AnnData files
 nbatlas_sce="${ref_dir}/NBAtlas_sce.rds"
 nbatlas_anndata="${ref_dir}/NBAtlas_anndata.h5ad"
+nbatlas_hvg_file="${ref_dir}/NBAtlas_hvgs.txt"
 
 # First, download the NBAtlas Seurat objects from Mendeley with a helper function
 # This function takes two arguments in order, the URL and the filename to save to
@@ -168,6 +170,7 @@ if [ ! -f ${nbatlas_sce} ] || [ ! -f ${nbatlas_anndata} ] || [[ ${force_convert_
        --tumor_metadata_file "${nbatlas_tumor_metadata_file}" \
        --sce_file "${nbatlas_sce}" \
        --anndata_file "${nbatlas_anndata}" \
+       --nbatlas_hvg_file "${nbatlas_hvg_file}" \
        ${test_flag}
 fi
 
@@ -211,3 +214,18 @@ for sample_id in $sample_ids; do
 
     done
 done
+
+
+###################################################################
+#################### scANVI/scArches annotation ###################
+###################################################################
+
+# Prepare the query merged SCE object for scANVI/scArches
+
+merged_sce_file="${merged_dir}/SCPCP000004_merged.rds"
+prepared_anndata_file="${scratch_dir}/SCPCP000004_merged_prepared.h5ad"
+
+Rscript ${script_dir}/03a_prepare-scanvi-query.R \
+    --merged_sce_file "${merged_sce_file} \
+    --nbatlas_hvg_file "${nbatlas_hvg_file}" \
+    --prepared_anndata_file "${prepared_anndata_file}"
