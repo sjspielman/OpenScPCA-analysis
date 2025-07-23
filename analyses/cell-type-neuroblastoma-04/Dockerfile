@@ -9,9 +9,16 @@ LABEL org.opencontainers.image.source="https://github.com/AlexsLemonade/OpenScPC
 
 # Set an environment variable to allow checking if we are in an OpenScPCA container
 ENV OPENSCPCA_DOCKER=TRUE
-
 # Disable the renv cache to install packages directly into the R library
 ENV RENV_CONFIG_CACHE_ENABLED=FALSE
+
+
+# set a name for the conda environment
+ARG ENV_NAME=openscpca-cell-type-neuroblastoma-04
+
+# set environment variables to install conda
+ENV PATH="/opt/conda/bin:${PATH}"
+
 
 # Install dependencies for renv libraries
 RUN apt-get -y update &&  \
@@ -23,6 +30,9 @@ RUN apt-get -y update &&  \
   && rm -rf /var/lib/apt/lists/*
 
 
+
+###################################
+
 # Install conda via miniforge
 # adapted from https://github.com/conda-forge/miniforge-images/blob/master/ubuntu/Dockerfile
 RUN curl -L "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" -o /tmp/miniforge.sh \
@@ -33,20 +43,34 @@ RUN curl -L "https://github.com/conda-forge/miniforge/releases/latest/download/M
   && find /opt/conda -follow -type f -name '*.pyc' -delete \
   && conda clean --force-pkgs-dirs --all --yes
 
+# Activate conda environments in bash
+RUN ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
+  && echo ". /opt/conda/etc/profile.d/conda.sh" >> /etc/skel/.bashrc \
+  && echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc
+
 # add conda-lock
-RUN conda install conda-lock && conda clean --all --yes
+#RUN conda install conda-lock && conda clean --all --yes
 
 # Copy conda lock file to image
-COPY conda-lock.yml conda-lock.yml
+#COPY conda-lock.yml conda-lock.yml
 
 # restore from conda-lock.yml file and clean up to reduce image size
 #RUN conda-lock install -n ${ENV_NAME} conda-lock.yml \
 #  && conda clean --all --yes
+
+# Copy environment file to image
+COPY environment-gpu.yml environment-gpu.yml
+
+
 RUN conda env create -n ${ENV_NAME} environment-gpu.yml \
   && conda clean --all --yes
 
 # Activate conda environment on bash launch
 RUN echo "conda activate ${ENV_NAME}" >> ~/.bashrc
+
+
+###################################
+
 
 # Install renv to enable later package installation
 RUN Rscript -e "install.packages('renv')"
@@ -62,6 +86,9 @@ RUN Rscript -e 'renv::restore()' && \
   rm -rf ~/.cache/R/renv && \
   rm -rf /tmp/downloaded_packages && \
   rm -rf /tmp/Rtmp*
+
+
+##################################
 
 # Complete installation of zellkonverter conda env
 ENV BASILISK_EXTERNAL_DIR=/usr/local/renv/basilisk
