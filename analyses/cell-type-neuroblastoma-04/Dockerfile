@@ -40,7 +40,9 @@ RUN conda install conda-lock && conda clean --all --yes
 COPY conda-lock.yml conda-lock.yml
 
 # restore from conda-lock.yml file and clean up to reduce image size
-RUN conda-lock install -n ${ENV_NAME} conda-lock.yml \
+#RUN conda-lock install -n ${ENV_NAME} conda-lock.yml \
+#  && conda clean --all --yes
+RUN conda env create -n ${ENV_NAME} environment-gpu.yml \
   && conda clean --all --yes
 
 # Activate conda environment on bash launch
