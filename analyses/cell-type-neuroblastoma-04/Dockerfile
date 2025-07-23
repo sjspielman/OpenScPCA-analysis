@@ -22,6 +22,30 @@ RUN apt-get -y update &&  \
   lzma-dev \
   && rm -rf /var/lib/apt/lists/*
 
+
+# Install conda via miniforge
+# adapted from https://github.com/conda-forge/miniforge-images/blob/master/ubuntu/Dockerfile
+RUN curl -L "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" -o /tmp/miniforge.sh \
+  && bash /tmp/miniforge.sh -b -p /opt/conda \
+  && rm -f /tmp/miniforge.sh \
+  && conda clean --tarballs --index-cache --packages --yes \
+  && find /opt/conda -follow -type f -name '*.a' -delete \
+  && find /opt/conda -follow -type f -name '*.pyc' -delete \
+  && conda clean --force-pkgs-dirs --all --yes
+
+# add conda-lock
+RUN conda install conda-lock && conda clean --all --yes
+
+# Copy conda lock file to image
+COPY conda-lock.yml conda-lock.yml
+
+# restore from conda-lock.yml file and clean up to reduce image size
+RUN conda-lock install -n ${ENV_NAME} conda-lock.yml \
+  && conda clean --all --yes
+
+# Activate conda environment on bash launch
+RUN echo "conda activate ${ENV_NAME}" >> ~/.bashrc
+
 # Install renv to enable later package installation
 RUN Rscript -e "install.packages('renv')"
 
@@ -36,7 +60,6 @@ RUN Rscript -e 'renv::restore()' && \
   rm -rf ~/.cache/R/renv && \
   rm -rf /tmp/downloaded_packages && \
   rm -rf /tmp/Rtmp*
-
 
 # Complete installation of zellkonverter conda env
 ENV BASILISK_EXTERNAL_DIR=/usr/local/renv/basilisk
