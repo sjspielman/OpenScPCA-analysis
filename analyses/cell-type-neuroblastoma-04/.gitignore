@@ -10,3 +10,6 @@
 exploratory-notebooks/reference-aggregation.nb.html
 exploratory-notebooks/separate-tumor.nb.html
 exploratory-notebooks/filter-genes.nb.html
+
+# Ignore the HVG file
+references/NBAtlas_hvgs.txt
