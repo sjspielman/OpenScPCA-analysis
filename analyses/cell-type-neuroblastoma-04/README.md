@@ -30,11 +30,7 @@ See documentation in the script for how to modify these or other settings.
 
 ## Input files
 
-This module requires the following input files:
-
-* The processed `SCE` objects for project `SCPCP000004`
-* The merged `SCE` object for `SCPCP000004`
-
+This module requires the following input files the processed `SCE` objects for project `SCPCP000004`.
 These files can be obtained with the following code run from the root of the `OpenScPCA-analysis` repository.
 You must be logged into your AWS account to download these files.
 
