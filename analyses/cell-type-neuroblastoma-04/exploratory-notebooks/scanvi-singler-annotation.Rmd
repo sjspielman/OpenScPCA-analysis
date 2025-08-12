@@ -1,0 +1,904 @@
+---
+title: "Annotate samples using NBAtlas reference"
+author: "Stephanie J. Spielman"
+date: "`r Sys.Date()`"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    code_folding: hide
+---
+
+We have used `SingleR` and `scANVI/scArches` to perform cell type annotation on `SCPCP000004` samples using the NBAtlas reference.
+The goal of this notebook is to derive annotations for these samples using information from these annotations as well as consensus cell type annotations.
+
+
+1. All three agree
+2. Two out of three agree
+ - if labels are in the same label family we can assign at a different level of organization
+   - e.g. (hypothetically), if scanvi is CD4, singler is CD8, and consensus is mature T, then we'd use the label T cell
+ - would we assign the shared label if one method failed?
+  - for example, singler is unknown but scanvi and consensus match ----> NO if we want to be conservative. YES use the shared label if we like labels. **How many are in this?**
+  - for example, consensus is known but scanvi and singler match. ----> YES, use the match.
+ - is there any circumstance where we'd assign a label if only 2 truly agree?
+  - for example, singler & consensus are endothelial, scanvi is RBC ----> NO, leave as unknown
+   
+## Setup
+
+```{r, warning = FALSE}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(patchwork)
+  library(SingleCellExperiment)
+})
+
+theme_set(theme_bw())
+
+# Define color ramp for shared use in the heatmaps
+heatmap_col_fun <- circlize::colorRamp2(c(0, 1), colors = c("white", "darkslateblue"))
+# Set heatmap padding option
+ComplexHeatmap::ht_opt(TITLE_PADDING = grid::unit(0.6, "in"))
+
+# settings
+options(
+  dplyr.summarise.inform = FALSE, 
+  readr.show_col_types = FALSE
+)
+```
+
+
+### Paths
+
+```{r base paths}
+# The base path for the OpenScPCA repository, found by its (hidden) .git directory
+repository_base <- rprojroot::find_root(rprojroot::is_git_root)
+
+merged_dir <- file.path(repository_base, "data", "current", "results", "merge-sce", "SCPCP000004")
+module_dir <- file.path(repository_base, "analyses", "cell-type-neuroblastoma-04")
+ref_dir <- file.path(module_dir, "references")
+results_dir <- file.path(module_dir, "results")
+singler_dir <- file.path(results_dir, "singler")
+scanvi_dir <- file.path(results_dir, "scanvi")
+```
+
+
+```{r file paths}
+# merged SCE file
+sce_file <- file.path(
+  merged_dir,
+  "SCPCP000004_merged.rds"
+)
+
+# SingleR files
+singler_files <- list.files(
+  path = singler_dir,
+  pattern = "_singler-annotations\\.tsv",
+  recursive = TRUE,
+  full.names = TRUE
+) |>
+  # add names as library id
+  purrr::set_names(
+    \(x) {
+      stringr::str_remove(basename(x), "_singler-annotations.tsv")
+    }
+  )
+
+# scanvi predictions
+scanvi_file <- file.path(
+  scanvi_dir, 
+  "scanvi-predictions.tsv"
+)
+
+
+# broad consensus cell type groups
+validation_url <- "https://raw.githubusercontent.com/AlexsLemonade/OpenScPCA-analysis/refs/heads/main/analyses/cell-type-consensus/references/consensus-validation-groups.tsv"
+
+# palette files
+recoded_palette_file <- file.path(
+  module_dir,
+  "palettes",
+  "harmonized-cell-type-palette.tsv"
+)
+
+nbatlas_palette_file <- file.path(
+  module_dir,
+  "palettes",
+  "nbatlas-marker-genes-palette.tsv"
+)
+
+# marker genes for validation
+consensus_markers_file <- "https://raw.githubusercontent.com/AlexsLemonade/OpenScPCA-analysis/refs/heads/main/analyses/cell-type-consensus/references/validation-markers.tsv"
+nbatlas_markers_file <- file.path(ref_dir, "nbatlas-marker-genes.tsv")
+```
+
+### Functions
+
+```{r}
+# Source Jaccard and heatmap utilities functions
+source(file.path(module_dir, "scripts", "utils", "jaccard-utils.R"))
+
+# Source additional utilities functions:
+# - select_nbatlas_markers()
+# - harmonize_celltypes()
+# - faceted_umap()
+# - generate_dotplot()
+source(file.path(module_dir, "scripts", "utils", "celltype-utils.R"))
+```
+
+### Read and prepare input data
+
+Read merged SCE object:
+
+```{r}
+merged_sce <- readRDS(sce_file)
+# immediately remove assays we don't need for space
+assay(merged_sce, "spliced") <- NULL
+assay(merged_sce, "counts") <- NULL
+reducedDim(merged_sce, "PCA") <- NULL
+```
+
+Read SingleR results:
+
+```{r}
+singler_df <- singler_files |>
+  purrr::map(readr::read_tsv) |>
+  purrr::list_rbind(names_to = "library_id") |>
+  dplyr::mutate(
+    # add cell id column for unique rows & joining
+    cell_id = glue::glue("{library_id}-{barcodes}"),
+    # recode NA -> "unknown_singler"
+    singler = ifelse(is.na(pruned.labels),"unknown_singler", pruned.labels)
+  ) |>
+  dplyr::select(cell_id, singler, singler_delta_next = delta.next)
+```
+
+Read and prepare scanvi results:
+
+```{r}
+scanvi_full_df <- readr::read_tsv(
+  file.path(scanvi_dir, "scanvi_predictions.tsv")
+) |>
+  dplyr::select(
+    cell_id, 
+    scanvi = scanvi_prediction, 
+    starts_with("pp_")
+  ) |>
+  tidyr::pivot_longer(
+    starts_with("pp_"), 
+    names_to = "posterior_celltype", 
+    values_to = "posterior"
+  ) |>
+  dplyr::mutate(posterior_celltype = stringr::str_remove(posterior_celltype, "^pp_"))
+
+# create dedicated column for the posterior associated with the label
+scanvi_first_label <- scanvi_full_df |>
+  dplyr::filter(scanvi == posterior_celltype) |>
+  dplyr::select(cell_id, scanvi, scanvi_posterior = posterior)
+  
+# create dedicated column for the posterior associated with the *second best* label
+scanvi_second_label <- scanvi_full_df |>
+  dplyr::group_by(cell_id) |>
+  dplyr::mutate(posterior_rank = rank(posterior)) |>
+  dplyr::filter(posterior_rank == 2) |>
+  dplyr::select(
+    cell_id, 
+    scanvi_second_celltype = posterior_celltype, 
+    scanvi_second_posterior = posterior
+  )
+
+# combine and calculate a delta_next
+scanvi_df <- scanvi_first_label |>
+  dplyr::left_join(scanvi_second_label) |>
+  dplyr::mutate(scanvi_delta_next = scanvi_posterior - scanvi_second_posterior)
+```
+
+
+Read and prepare additional helper files for viz:
+
+```{r}
+# validation data frames
+validation_df <- readr::read_tsv(validation_url) |>
+  dplyr::select(consensus_annotation, validation_group_annotation)
+consensus_markers_df <- readr::read_tsv(consensus_markers_file)
+nbatlas_markers_df <- readr::read_tsv(nbatlas_markers_file)
+
+
+# set up palettes
+# recoded to shared colors
+recoded_palette_df <- readr::read_tsv(recoded_palette_file)
+recoded_celltype_pal <- recoded_palette_df$hex_color
+names(recoded_celltype_pal) <- recoded_palette_df$harmonized_label
+
+# only the NBAtlas labels - use for validation dot plot
+nbatlas_palette_df <- readr::read_tsv(nbatlas_palette_file)
+nbatlas_celltype_pal <- nbatlas_palette_df$hex_color
+names(nbatlas_celltype_pal) <- nbatlas_palette_df$NBAtlas_label
+```
+
+
+## Posteriors
+
+Before we dive into annotation, we should get a sense of reliability for the scANVI results.
+We have SingleR unknowns that were unreliable, but what about scANVI? 
+
+First what is the distribution of posterior probabilities?
+We'll look at this on a per-library basis to see if there's any bias.
+
+
+```{r fig.height=12, fig.width=15}
+scanvi_df |>
+  tidyr::separate(cell_id, into = c("library_id", "barcode"), remove = FALSE) |>
+  dplyr::add_count(library_id) |>
+  dplyr::mutate(library_id = glue::glue("{library_id} (N={n})")) |>
+  ############ into ggplot ################
+  ggplot() + 
+  aes(x = scanvi_posterior) + 
+  # ugly but _very visible_ color
+  geom_histogram(bins = 100, fill = "magenta", color = "magenta") + 
+  facet_wrap(vars(library_id), scales = "free_y", ncol = 7) 
+
+```
+
+
+The posterior probabilities here are all _exceptionally_ high, consistently across all libraries.
+
+Let's instead look at this on a per-cell type basis:
+
+```{r fig.height=8, fig.width=12}
+ggplot(scanvi_df) + 
+  aes(x = scanvi_posterior) + 
+  # ugly but _very visible_ color
+  geom_histogram(bins = 100, fill = "magenta", color = "magenta") + 
+  facet_wrap(vars(scanvi), scales = "free_y", ncol = 5) 
+```
+
+While annotation reliability is about the same on a per-library basis, it seems that certain cell types may be much easier to classify than others. 
+We'll look at the median value for each:
+
+```{r}
+scanvi_df |>
+  dplyr::group_by(scanvi) |>
+  dplyr::summarize(median_pp = median(scanvi_posterior)) |>
+  dplyr::arrange(median_pp)
+```
+
+I personally am conservative on these matters, so given how high these are, I'm going to go with a 0.9 posterior probability as pretty decent evidence.
+Let's set these to `unknown_scanvi`:
+
+```{r}
+pp_threshold <- 0.9
+scanvi_df <- scanvi_df |>
+  dplyr::mutate(scanvi = ifelse(
+    scanvi_posterior < pp_threshold, 
+    "unknown_scanvi",
+    scanvi
+  ))
+```
+
+## Let's go!
+
+Create a single data frame with UMAP coordinates and all cell types:
+
+```{r}
+celltype_full_df <- scuttle::makePerCellDF(
+  merged_sce,
+  use.coldata = c("sample_id", "consensus_celltype_annotation"),
+  use.dimred = c("UMAP")
+) |>
+  # there ARE repeated barcodes so we need to keep cell_id around
+  tibble::rownames_to_column("cell_id") |>
+  dplyr::rename(
+    UMAP1 = UMAP.1,
+    UMAP2 = UMAP.2,
+    consensus_annotation = consensus_celltype_annotation
+  ) |>
+  dplyr::left_join(validation_df, by = "consensus_annotation") |>
+  # recode consensus NAs to "unknown_consensus"
+  dplyr::mutate(
+    validation_group_annotation = ifelse(
+      is.na(validation_group_annotation), "unknown_consensus", validation_group_annotation
+    ),
+    consensus_annotation = ifelse(
+      is.na(consensus_annotation), "unknown_consensus", consensus_annotation
+    )
+  ) |>
+  # only bring in the annotations, not the delta_next/posteriors
+  dplyr::left_join(
+    dplyr::select(singler_df, cell_id, singler), by = "cell_id"
+  ) |>
+  dplyr::left_join(
+    dplyr::select(scanvi_df, cell_id, scanvi), by = "cell_id"
+  ) |>
+  # make it tidy
+  tidyr::pivot_longer(
+    c(validation_group_annotation, consensus_annotation, singler, scanvi), 
+    names_to = "celltype_method", 
+    values_to = "label"
+  ) |>
+  # note that the `consensus_annotation` values won't necessarily get harmonized
+  harmonize_celltypes(label, label_recoded)
+
+# we dont want this column for viz even though we do want it for annotation in the end
+celltype_df <- celltype_full_df |>
+  dplyr::filter(celltype_method != "consensus_annotation")
+```
+
+
+## UMAPs
+
+### Merged object heatmap
+
+```{r, fig.width = 12, fig.height = 8}
+ggplot(celltype_df) +
+  aes(x = UMAP1, y = UMAP2, color = label_recoded) +
+  geom_point(alpha = 0.5, size = 0.2) +
+  scale_color_manual(values = recoded_celltype_pal) +
+  facet_wrap(vars(celltype_method)) +
+  coord_equal() +
+  theme(
+    legend.position = "bottom", 
+    axis.text = element_blank(), 
+    axis.ticks = element_blank()
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 2, alpha = 1)))
+```
+
+
+## Heatmap
+
+Below we show a stacked heatmap comparing the SingleR and scANVI annotations to broad consensus groups.
+
+
+```{r, fig.height = 13, fig.width = 12} 
+# make a wide version for the heatmap
+celltype_wide_df <- celltype_df |>
+  dplyr::select(-label) |>
+  tidyr::pivot_wider(
+    names_from = celltype_method,
+    values_from = label_recoded
+  )
+
+list(
+  "singler" = make_jaccard_matrix(celltype_wide_df, "validation_group_annotation", "singler"),
+  "scanvi" = make_jaccard_matrix(celltype_wide_df, "validation_group_annotation", "scanvi")
+) |>
+  purrr::imap(
+    \(jaccard_mat, name) create_single_heatmap(
+        mat = jaccard_mat,
+        row_title = name,
+        column_title = "Consensus validation groups",
+        keep_legend_name = "singler" # arbitrary
+    )
+  ) |>
+  # concatenate vertically into HeatmapList object
+  purrr::reduce(ComplexHeatmap::`%v%`) |>
+  ComplexHeatmap::draw(heatmap_legend_side = "right")
+```
+
+
+
+## Annotation time and refinement
+
+We'll define some cell type groups which will be useful for annotation.
+This is a placeholder.
+```{r}
+match_df <- readr::read_tsv("~/Desktop/matching.tsv") |>
+  tidyr::separate_rows(
+    consensus_labels, sep = "; "
+  ) |>
+  dplyr::rename(consensus_annotation = consensus_labels)
+```
+
+
+
+
+
+### Scenario 1: All three labels agree
+
+
+```{r}
+# add columns for joining only
+match_join_df <- match_df |>
+  dplyr::mutate(scanvi = NBAtlas_label, singler = NBAtlas_label) |>
+  dplyr::select(-NBAtlas_label)
+```
+
+Here we're getting adding in `final_label` for the _exact_ matches.
+This also establishes `annotation_df`; `NA`s in the `final_label` column don't have labels yet.
+
+```{r}
+celltype_annotate_df <- celltype_full_df |>
+  dplyr::filter(celltype_method != "validation_group_annotation") |>
+  dplyr::select(cell_id, celltype_method, label) |>
+  tidyr::pivot_wider(
+    names_from = celltype_method,
+    values_from = label
+  )
+
+
+annotation_df <- celltype_annotate_df |>
+  dplyr::left_join(
+    match_join_df, by = c("consensus_annotation", "scanvi", "singler")
+  ) 
+```
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+
+How many does this take care of? About 76% of the cells. This is a good start!
+
+
+### Scenario 2: Labels do not exactly agree but are in the same family
+
+Now we need to deal with families which will need `case_when`.
+We'll define groupings needed for that code first.
+
+
+```{r}
+nbatlas_t_celltypes <- c("CD4+ T cell", "CD8+ T cell", "NKT cell", "Treg")
+nbatlas_nk_celltypes <- c("Circulating NK cell", "Resident NK cell", "TOX2+/KIT+ NK cell")
+nbatlas_dend_celltypes <- c("cDC1", "cDC2/DC3", "Migratory cDC")
+nbatlas_mono_celltypes <- c("Classical monocyte", "Patrolling monocyte")
+
+consensus_t_celltypes <- c(
+  "mature alpha-beta T cell", 
+  "mature T cell", 
+  "memory T cell", 
+  "regulatory T cell", 
+  "T cell"
+)
+
+consensus_b_celltypes <- c(
+  "naive B cell", 
+  "mature B cell", 
+  "memory B cell", 
+  "B cell"
+)
+
+consensus_endothelial_celltypes <- c(
+  "endothelial cell",
+  "blood vessel endothelial cell",
+  "pericyte"
+)
+```
+
+Now we can try to assign.
+
+
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = dplyr::case_when(
+      is.na(final_label) & singler %in% nbatlas_t_celltypes & scanvi %in% nbatlas_t_celltypes & consensus_annotation %in% consensus_t_celltypes ~ "T cell",
+      is.na(final_label) & singler %in% nbatlas_nk_celltypes & scanvi %in% nbatlas_nk_celltypes & consensus_annotation == "natural killer cell" ~ "natural killer cell",
+      is.na(final_label) & singler %in% nbatlas_dend_celltypes & scanvi %in% nbatlas_dend_celltypes & consensus_annotation == "dendritic cell" ~ "dendritic cell",
+      is.na(final_label) & singler %in% nbatlas_mono_celltypes & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "monocyte" ~ "monocyte",
+      is.na(final_label) & singler %in% nbatlas_mono_celltypes & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "myeloid" ~ "myeloid",
+      is.na(final_label) & singler == "Endothelial" & scanvi == "Endothelial" & consensus_annotation %in% consensus_endothelial_celltypes ~ "endothelial cell",
+      is.na(final_label) & singler == "B cell" & scanvi == "B cell" & consensus_annotation %in% consensus_b_celltypes ~ "B cell",
+      .default = final_label
+    )
+  ) 
+```
+
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+This got us a _bit_ farther on, but not by much. 
+
+### Scenario 3: 2/3 labels agree
+
+#### Consensus unknown
+
+We'll apply the same logic as the last step, but with Unknown consensus.
+
+First, when there is exact agreement:
+
+TODO
+This code ends up giving us Endothelial for example. We'll need to harmonize in the end.
+
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = ifelse(
+      is.na(final_label) & singler == scanvi & consensus_annotation == "Unknown", 
+      singler, # arbitrary since they are the same
+      final_label
+    )
+  ) 
+```
+
+
+Now we have annotated this fraction of cells:
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+
+Next, if singler/scanvi are in the same family consensus is Unknown.
+
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = dplyr::case_when(
+      is.na(final_label) & singler %in% nbatlas_t_celltypes & scanvi %in% nbatlas_t_celltypes & consensus_annotation == "Unknown" ~ "T cell",
+      is.na(final_label) & singler %in% nbatlas_nk_celltypes & scanvi %in% nbatlas_nk_celltypes & consensus_annotation == "Unknown" ~ "natural killer cell",
+      is.na(final_label) & singler %in% nbatlas_dend_celltypes & scanvi %in% nbatlas_dend_celltypes & consensus_annotation == "Unknown" ~ "dendritic cell",
+      is.na(final_label) & singler %in% nbatlas_mono_celltypes & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "Unknown" ~ "monocyte",
+      is.na(final_label) & singler %in% nbatlas_mono_celltypes & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "Unknown" ~ "myeloid",
+      is.na(final_label) & singler == "Endothelial" & scanvi == "Endothelial" & consensus_annotation == "Unknown" ~ "endothelial cell",
+      is.na(final_label) & singler == "B cell" & scanvi == "B cell" & consensus_annotation == "Unknown" ~ "B cell",
+      .default = final_label
+    )
+  ) 
+```
+
+
+Now we're at:
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+
+
+
+#### SingleR unknown
+
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = dplyr::case_when(
+      is.na(final_label) & singler == "unknown_singler" & scanvi %in% nbatlas_t_celltypes & consensus_annotation %in% consensus_t_celltypes ~ "T cell",
+      is.na(final_label) & singler == "unknown_singler" & scanvi %in% nbatlas_nk_celltypes & consensus_annotation == "natural killer cell" ~ "natural killer cell",
+      is.na(final_label) & singler == "unknown_singler" & scanvi %in% nbatlas_dend_celltypes & consensus_annotation == "dendritic cell" ~ "dendritic cell",
+      is.na(final_label) & singler == "unknown_singler" & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "monocyte" ~ "monocyte",
+      is.na(final_label) & singler == "unknown_singler" & scanvi %in% nbatlas_mono_celltypes & consensus_annotation == "myeloid" ~ "myeloid",
+      is.na(final_label) & singler == "unknown_singler" & scanvi == "Endothelial" & consensus_annotation %in% consensus_endothelial_celltypes ~ "endothelial cell",
+      is.na(final_label) & singler == "unknown_singler" & scanvi == "B cell" & consensus_annotation %in% consensus_b_celltypes ~ "B cell",
+      .default = final_label
+    )
+  ) 
+```
+
+
+Now we're at:
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+
+
+#### scANVI unknown
+
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = dplyr::case_when(
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler %in% nbatlas_t_celltypes & consensus_annotation %in% consensus_t_celltypes ~ "T cell",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler %in% nbatlas_nk_celltypes & consensus_annotation == "natural killer cell" ~ "natural killer cell",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler %in% nbatlas_dend_celltypes & consensus_annotation == "dendritic cell" ~ "dendritic cell",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler %in% nbatlas_mono_celltypes & consensus_annotation == "monocyte" ~ "monocyte",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler %in% nbatlas_mono_celltypes & consensus_annotation == "myeloid" ~ "myeloid",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler == "Endothelial" & consensus_annotation %in% consensus_endothelial_celltypes ~ "endothelial cell",
+      is.na(final_label) & scanvi == "unknown_scanvi" & singler == "B cell" & consensus_annotation %in% consensus_b_celltypes ~ "B cell",
+      .default = final_label
+    )
+  ) 
+```
+
+
+Now we're at:
+
+```{r}
+sum(!is.na(annotation_df$final_label)) / nrow(annotation_df)
+```
+
+### What's left?
+
+What fraction of cells have been annotated per library?
+
+
+```{r}
+frac_labeled_df <- annotation_df |>
+  tidyr::separate(cell_id, into = c("library_id", "barcode"), remove = FALSE) |>
+  dplyr::mutate(has_label = !is.na(final_label)) |>
+  dplyr::count(library_id, has_label) |>
+  tidyr::pivot_wider(
+    names_from = has_label, 
+    values_from = n
+  ) |>
+  dplyr::mutate(
+    frac_labeled = `TRUE`/(`TRUE`+`FALSE`), 
+    total_cells = `TRUE` + `FALSE`
+  ) |>
+  dplyr::select(library_id, frac_labeled, total_cells)
+
+
+ggplot(frac_labeled_df) + 
+  aes(x = frac_labeled) + 
+  geom_histogram(bins = 40)
+
+
+ggplot(frac_labeled_df) + 
+  aes(x = total_cells, y = frac_labeled) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+
+```
+
+
+TODO: I would like to do this as geom_tile.
+```{r, fig.height = 12, fig.width = 12}
+unannotated_df <- annotation_df |>
+  dplyr::filter(is.na(final_label))
+
+heatmap_col_fun <- circlize::colorRamp2(c(0, 1), colors = c("white", "darkslateblue"))
+
+unannotated_df |>
+  dplyr::count(consensus_annotation, singler, scanvi)
+
+list(
+  "singler" = table(unannotated_df$consensus_annotation, unannotated_df$singler) |> as.matrix(),
+  "scanvi" = table(unannotated_df$consensus_annotation, unannotated_df$scanvi) |> as.matrix()
+) |>
+  # TODO!
+  purrr::imap(
+    \(jaccard_mat, name) create_single_heatmap(
+        mat = jaccard_mat,
+        row_title = name,
+        column_title = "Consensus validation groups",
+        col_fun =  circlize::colorRamp2(c(0, 1000), colors = c("white", "darkslateblue")),
+        keep_legend_name = "singler" # arbitrary
+    )
+  ) |>
+  # concatenate vertically into HeatmapList object
+  purrr::reduce(ComplexHeatmap::`%v%`) |>
+  ComplexHeatmap::draw(heatmap_legend_side = "right")
+
+```
+
+
+
+
+
+
+
+_was originally the next code in posteriors_
+
+
+It looks like cell types with multiple representatives at different levels of organization are a challenge, but cell types with less overlap to other cell types have higher posterior probabilities, which is not unreasonable!
+One question then is, for the multiple cell types, is the second one in the same family?
+```{r}
+multiplicity <- c(t_celltypes, nk_celltypes, dend_celltypes, mono_celltypes)
+
+scanvi_df |>
+  dplyr::filter(scanvi %in% multiplicity) |>
+  dplyr::mutate(
+    second_is_consistent = dplyr::case_when(
+      scanvi %in% t_celltypes & scanvi_second_celltype %in% t_celltypes ~ TRUE,
+      scanvi %in% nk_celltypes & scanvi_second_celltype %in% nk_celltypes ~ TRUE,
+      scanvi %in% dend_celltypes & scanvi_second_celltype %in% dend_celltypes ~ TRUE,
+      scanvi %in% mono_celltypes & scanvi_second_celltype %in% mono_celltypes ~ TRUE,
+      .default = FALSE
+    )
+  ) |>
+  dplyr::count(second_is_consistent)
+```
+
+
+It turns out it never is, which is a bit surprising.
+
+What about when scanvi/singler disagree - do they ever toggle out?
+
+
+
+```{r}
+dplyr::left_join(
+  scanvi_df, 
+  singler_df
+) |>
+  dplyr::filter(
+    singler != scanvi, 
+    (scanvi %in% multiplicity| scanvi %in% multiplicity) 
+  ) |>
+  dplyr::mutate(
+    consistent = dplyr::case_when(
+      scanvi %in% t_celltypes & singler %in% t_celltypes ~ TRUE,
+      scanvi %in% nk_celltypes & singler %in% nk_celltypes ~ TRUE,
+      scanvi %in% dend_celltypes & singler %in% dend_celltypes ~ TRUE,
+      scanvi %in% mono_celltypes & singler %in% mono_celltypes ~ TRUE,
+      .default = FALSE
+    )
+  ) |>
+  dplyr::count(consistent)
+```
+
+This means there is a subset of disagreeing labels that we can potentially assign, if the consensus match up. 
+
+Let's look at where they agree and disagree and plot the delta_next for each.
+This will require another data frame.
+
+
+Higher values indicate increased reliability of the assigned cell type.
+```{r fig.width = 12, fig.height = 8}
+compare_df <- singler_df |>
+  dplyr::left_join(scanvi_df, by = "cell_id") |>
+  dplyr::mutate(singler_scanvi_agree = singler == scanvi) |>
+    tidyr::separate(cell_id, into = c("library_id", "barcode"), remove = FALSE)|>
+  # harmonize one at a time since wide so that we can color
+  harmonize_celltypes(singler, singler_recoded) |>
+  harmonize_celltypes(scanvi, scanvi_recoded)
+
+
+
+singler_delta_next_plot <- ggplot(compare_df) + 
+  aes(x = singler_delta_next, y = forcats::fct_rev(singler_recoded), fill = singler_scanvi_agree) + 
+  ggridges::geom_density_ridges2(alpha = 0.5) +
+  labs(
+    x = "SingleR delta next score",
+    y = "SingleR label", 
+    fill = "Methods agree"
+  )
+
+scanvi_delta_next_plot <- ggplot(compare_df) + 
+  aes(x = scanvi_delta_next, y = forcats::fct_rev(scanvi_recoded), fill = singler_scanvi_agree) + 
+  ggridges::geom_density_ridges2(alpha = 0.5) +
+  labs(
+    x = "scANVI delta-next (posterior diff)",
+    y = "scANVI label", 
+    fill = "Methods agree"
+  )
+
+singler_delta_next_plot + scanvi_delta_next_plot + plot_layout(guides = 'collect')
+
+sum(compare_df$scanvi_posterior < 0.95)
+
+
+compare_df |>
+  dplyr::filter(scanvi_posterior < 0.95) 
+nrow(compare_df)
+```
+
+
+```{r, fig.width = 12}
+
+ggplot(compare_df) +
+  aes(x = singler_scanvi_agree, y = scanvi_posterior) +
+  ggforce::geom_sina()
+
+compare_df |>
+  dplyr::filter(singler_scanvi_agree, scanvi_posterior < 0.9) |>
+  dplyr::count(library_id)
+
+
+summary(compare_df$scanvi_posterior[compare_df$singler_scanvi_agree == TRUE])
+summary(compare_df$scanvi_posterior[!compare_df$singler_scanvi_agree])
+
+
+compare_df |>
+  dplyr::count(singler_scanvi_agree, library_id) |>
+  tidyr::pivot_wider(
+    names_from = singler_scanvi_agree, values_from = n
+  ) |>
+  dplyr::mutate(frac_agree = `TRUE`/(`FALSE` + `TRUE`))
+
+
+compare_df |>
+  dplyr::filter(library_id == "SCPCL001065")
+
+ ggplot(compare_df) + 
+  aes(y = singler_delta_next, x = forcats::fct_rev(singler_recoded), color = singler_scanvi_agree) + 
+  ggforce::geom_sina(size = 0.3)
+  labs(
+    x = "SingleR delta next score",
+    y = "SingleR label", 
+    fill = "Methods agree"
+  )
+
+scanvi_delta_next_plot <- ggplot(compare_df) + 
+  aes(x = scanvi_delta_next, y = forcats::fct_rev(scanvi_recoded), fill = singler_scanvi_agree) + 
+  ggridges::geom_density_ridges2(alpha = 0.5) +
+  labs(
+    x = "scANVI delta-next (posterior diff)",
+    y = "scANVI label", 
+    fill = "Methods agree"
+  )
+
+singler_delta_next_plot + scanvi_delta_next_plot + plot_layout(guides = 'collect')
+```
+
+
+
+
+```{r}
+disagree_df <- celltype_wide_df |>
+  dplyr::filter(singler == scanvi) |>
+  dplyr::count(library_id, name = "n_disagree") |>
+  dplyr::inner_join(
+    dplyr::count(celltype_wide_df, library_id, name = "n_library")
+  ) |>
+  dplyr::mutate(frac_disagree = round(n_disagree / n_library, 2))
+
+```
+
+
+
+
+
+## SingleR and scANVI disagreements
+
+
+```{r, fig.width = 10, fig.height = 4}
+disagree_df <- celltype_wide_df |>
+  dplyr::filter(singler != scanvi) |>
+  dplyr::count(library_id, name = "n_disagree") |>
+  dplyr::inner_join(
+    dplyr::count(celltype_wide_df, library_id, name = "n_library")
+  ) |>
+  dplyr::mutate(frac_disagree = round(n_disagree / n_library, 2))
+
+p1 <- ggplot(disagree_df) + 
+  aes(x = frac_disagree) + 
+  geom_histogram(
+    fill = "orange", color = "maroon"
+  ) + 
+  scale_y_continuous(breaks = 1:9) +
+  ggtitle("per library, fraction of labels that disagree")
+
+p2 <- ggplot(disagree_df) + 
+  aes(x = n_library, y = frac_disagree) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  labs(x = "total cells per library", y = "fraction labels disagree") 
+
+
+p1 + p2
+
+```
+
+
+```{r fig.width = 10, fig.height = 10}
+
+make_jaccard_heatmap(
+  celltype_wide_df |>
+  dplyr::filter(singler != scanvi),
+  "singler",
+  "scanvi",
+  "disagreeing labels only \n\n Singler",
+  "scANVI"
+)
+```
+
+## Next steps
+
+- We have posterior probabilities for the scANVI results as well.
+  - Look at the distribution of scanvi posterior probabilities... (can we determine a threshold?)
+    - for agreeing vs disagreeing cells
+    - cells where singler was labeled vs NA
+  - We can also look at the "delta next" for posteriors
+
+- We'd like to identify a set of normal and tumor cells we're confident in to run inferCNV
+  - Ideally, this will be where all three labels (consensus, SinglerR NBAtlas, scANVI NBAtlas) agree
+  - Noting that "agreement" for tumor cells means consensus would have to be unknown
+  - For libraries with >= 100 normal cells we can run inferCNV and validate with the confident tumor cells
+    - For other libraries, we could wait and do a pooled strategy later
+    - Noting the confident tumor cells would hopefully show some expected NB CNVs too
+
+- Once we have normal and tumor calls, we can move onto cell state
+  - Question: Would we want to plan for this to be in the MS or is this now a stretch goal? Will influence planning. 
+  
+
+
+```{r}
+celltype_wide_df |>
+  dplyr::filter(singler != scanvi) |>
+  dplyr::filter(stringr::str_detect(scanvi, "T cell"))
+```
+
