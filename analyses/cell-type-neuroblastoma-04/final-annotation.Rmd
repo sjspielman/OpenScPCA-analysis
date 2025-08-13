@@ -350,25 +350,22 @@ list(
 
 
 
-## Annotation time and refinement
-
-We'll define some cell type groups which will be useful for annotation.
-This is a placeholder.
-```{r}
-match_df <- readr::read_tsv("~/Desktop/matching.tsv") |>
-  tidyr::separate_rows(
-    consensus_labels, sep = "; "
-  ) |>
-  dplyr::rename(consensus = consensus_labels)
-```
-
 ```{r}
 nbatlas_t_celltypes <- c("CD4+ T cell", "CD8+ T cell", "NKT cell", "Treg")
 nbatlas_nk_celltypes <- c("Circulating NK cell", "Resident NK cell", "TOX2+/KIT+ NK cell")
 nbatlas_dend_celltypes <- c("pDC", "cDC1", "cDC2/DC3", "Migratory cDC")
+nbatlas_cdend_celltypes <- c("cDC1", "cDC2/DC3", "Migratory cDC")
 nbatlas_mono_celltypes <- c("Classical monocyte", "Patrolling monocyte")
 nbatlas_monophago_celltypes <- c("cDC1", "cDC2/DC3", "Migratory cDC", nbatlas_mono_celltypes, "Macrophage") # NOT pDC!
 nbatlas_myeloid_leuko_celltypes <- c(nbatlas_monophago_celltypes, "Neutrophil")
+nbatlas_myeloid_celltypes <- c(
+  nbatlas_nk_celltypes, 
+  nbatlas_cdend_celltypes,
+  nbatlas_mono_celltypes,
+  "Macrophage",
+  "Neutrophil"
+)
+
 
 consensus_t_celltypes <- c(
   "mature alpha-beta T cell", 
@@ -408,23 +405,7 @@ consensus_endothelial_celltypes <- c(
   "blood vessel endothelial cell",
   "pericyte"
 )
-```
 
-
-### Scenario 1: All three labels agree
-
-
-```{r}
-# add columns for joining only
-match_join_df <- match_df |>
-  dplyr::mutate(scanvi = NBAtlas_label, singler = NBAtlas_label) |>
-  dplyr::select(-NBAtlas_label)
-```
-
-Here we're getting adding in `final_label` for the _exact_ matches.
-This also establishes `annotation_df`; `NA`s in the `final_label` column don't have labels yet.
-
-```{r}
 celltype_annotate_df <- celltype_full_df |>
   dplyr::filter(celltype_method != "validation_group_annotation") |>
   dplyr::select(cell_id, celltype_method, label) |>
@@ -437,8 +418,68 @@ celltype_annotate_df <- celltype_full_df |>
     values_from = label
   ) |>
   dplyr::rename(consensus = consensus_annotation)
+```
 
 
+## Annotation by Ally
+
+
+### Scenario 1: SinglE
+
+```{r}
+annotation_df <- celltype_annotate_df |>
+  dplyr::mutate(
+    final_label = ifelse(
+      scanvi == singler, scanvi, NA
+    )
+  ) # 0.8286943
+```
+
+
+Use the non-Zoom labels:
+```{r}
+annotation_df <- annotation_df |>
+  dplyr::mutate(
+    # make sure not to overwrite an existing label!
+    final_label = dplyr::case_when(
+      is.na(final_label) & singler %in% nbatlas_t_celltypes & scanvi %in% nbatlas_t_celltypes ~ "T cell",
+      is.na(final_label) & singler %in% nbatlas_nk_celltypes & scanvi %in% nbatlas_nk_celltypes ~ "NK cell",
+      is.na(final_label) & singler %in% nbatlas_myeloid_celltypes & scanvi %in% nbatlas_myeloid_celltypes ~ "Myeloid",
+      .default = final_label
+    )
+  ) 
+
+
+sum(!is.na(annotation_df$final_label))/nrow(annotation_df) # 0.8344759
+```
+
+
+> If the SingleR and scANVI labels are not in the same family and one of them matches with a consensus cell type then I would label it.
+
+
+
+## Annotation by Stephanie
+
+
+### Scenario 1: All three labels agree
+
+```{r}
+match_df <- readr::read_tsv("~/Desktop/matching.tsv") |>
+  tidyr::separate_rows(
+    consensus_labels, sep = "; "
+  ) |>
+  dplyr::rename(consensus = consensus_labels)
+
+# add columns for joining only
+match_join_df <- match_df |>
+  dplyr::mutate(scanvi = NBAtlas_label, singler = NBAtlas_label) |>
+  dplyr::select(-NBAtlas_label)
+```
+
+Here we're getting adding in `final_label` for the _exact_ matches.
+This also establishes `annotation_df`; `NA`s in the `final_label` column don't have labels yet.
+
+```{r}
 annotation_df <- celltype_annotate_df |>
   dplyr::left_join(
     match_join_df, by = c("consensus", "scanvi", "singler")
