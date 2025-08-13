@@ -3,11 +3,11 @@ B cell	B cell
 Endothelial	Endothelial
 Fibroblast	Fibroblast
 Immune cycling	Immune cycling
-cDC1	Myeloid
-cDC2/DC3	Myeloid
-Migratory cDC	Myeloid
-Classical monocyte	Myeloid
-Patrolling monocyte	Myeloid
+cDC1	cDC
+cDC2/DC3	cDC
+Migratory cDC	cDC
+Classical monocyte	Monocyte
+Patrolling monocyte	Monocyte
 Macrophage	Myeloid
 Neutrophil	Myeloid
 NE	NE
