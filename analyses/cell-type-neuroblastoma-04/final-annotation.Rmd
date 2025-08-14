@@ -8,7 +8,7 @@ output:
     toc_depth: 3
     code_folding: hide
 params:
-  scanvi_pp_threshold: 0.9      
+  scanvi_pp_threshold: 0.75    
   annotations_tsv: "../results/SCPCP000004-annotations.tsv"
 ---
 
@@ -372,11 +372,9 @@ p2 <- ggplot(frac_labeled_df) +
   aes(x = library_size, y = frac_labeled, color = is_xenograft) + 
   geom_point() + 
   labs(
-    x = "Total cells in library (log scale)",
+    x = "Total cells in library",
     y = "Fraction of library labeled"
   ) +
-  # to see the smaller libraries more clearly
-  scale_x_log10() +
   theme_bw() +
   theme(legend.position = "bottom")
 
