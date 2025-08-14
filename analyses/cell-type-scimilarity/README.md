@@ -4,13 +4,21 @@
 
 This module will be used to annotate cell types in all ScPCA libraries using [`SCimilarity`](https://genentech.github.io/scimilarity/index.html). 
 
+For cell type annotation, we use the model available on [Zenodo](https://zenodo.org/records/10685499). 
+
 ## Usage
 
-TBD
+Prior to running `SCimilarity` on all samples, the `setup-analysis.sh` script will need to be used to download the model and create a reference file with ontology identifiers for all cell type annotations. 
+
+This can be done by running the following command: 
+```sh
+./setup-analysis.sh
+```
+
 
 ## Input files
 
-This module requires the processed `SCE` objects for all projects as H5AD files. 
+This module requires the processed objects for all projects as H5AD files. 
 
 These files can be obtained with the following code run from the root of the `OpenScPCA-analysis` repository.
 You must be logged into your AWS account to download these files.
@@ -27,6 +35,21 @@ TBD
 ## Software requirements
 
 This module uses both `renv` and `conda` to manage R and Python software environments, respectively.
+
+To set up and activate the `conda` environment, run the following from the module directory:
+
+```
+conda-lock install --name openscpca-cell-type-scimilarity conda-lock.yml
+conda activate openscpca-cell-type-scimilarity
+```
+
+Running this requires that `conda-lock` is available in the current environment, e.g. from within the [`openscpca` environment](https://openscpca.readthedocs.io/en/latest/technical-setup/environment-setup/setup-conda/#create-an-openscpca-conda-environment).
+
+To set up the `renv` environment, launch `R` from the module directory and run:
+
+```
+renv::restore()
+```
 
 ## Computational resources
 
