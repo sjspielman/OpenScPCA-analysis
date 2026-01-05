@@ -16,6 +16,4 @@ dependencies:
   - anndata
   - scanpy
   - pytorch
-  - pip
-  - pip:
-      - scvi-tools
+  - scvi-tools
